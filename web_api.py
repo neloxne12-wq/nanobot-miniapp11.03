@@ -13,7 +13,7 @@ from database import db, ADMIN_IDS
 logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
-WEB_API_PORT = int(os.getenv("WEB_API_PORT", "8000"))
+WEB_API_PORT = int(os.getenv("PORT", os.getenv("WEB_API_PORT", "8000")))
 MINIAPP_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
