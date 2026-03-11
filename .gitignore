@@ -1,0 +1,24 @@
+# Secrets
+.env
+
+# Database
+*.db
+*.db-journal
+
+# Logs
+*.log
+
+# Binaries
+*.exe
+
+# Generated images (runtime)
+generated_images/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Empty placeholder folders
+backend/
+frontend/
