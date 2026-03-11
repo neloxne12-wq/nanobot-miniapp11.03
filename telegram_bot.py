@@ -1202,7 +1202,15 @@ async def process_generation_resolution(callback: types.CallbackQuery, state: FS
         file_id = sent_message.photo[-1].file_id
         await state.update_data(last_generated_image_file_id=file_id)
         db.save_last_generated_image(user_id, file_id)
-        
+
+        # Save to mini-app history so it appears in "Мои"
+        try:
+            import base64 as _b64
+            img_b64 = _b64.b64encode(image_data).decode()
+            db.add_to_history(user_id, "Генерация", prompt[:200], resolution, f"data:image/jpeg;base64,{img_b64}")
+        except Exception as _he:
+            logger.warning(f"Failed to save generate history for {user_id}: {_he}")
+
         # Show remaining generations and optional channel CTA
         user_info = db.get_user_info(user_id)
         remaining = user_info.get("generations_left", 0)
@@ -1901,6 +1909,15 @@ async def process_edit_resolution(callback: types.CallbackQuery, state: FSMConte
         file_id = sent_message.photo[-1].file_id
         await state.update_data(last_generated_image_file_id=file_id)
         db.save_last_generated_image(user_id, file_id)
+
+        # Save to mini-app history so it appears in "Мои"
+        try:
+            import base64 as _b64
+            img_b64 = _b64.b64encode(image_data).decode()
+            db.add_to_history(user_id, "Редактирование", prompt[:200], resolution, f"data:image/jpeg;base64,{img_b64}")
+        except Exception as _he:
+            logger.warning(f"Failed to save edit history for {user_id}: {_he}")
+
         # Channel CTA after edit (same rules: free=every time, paid=every 4)
         user_info = db.get_user_info(user_id)
         remaining = user_info.get("generations_left", 0)
@@ -3747,7 +3764,15 @@ async def upscale_process(callback: types.CallbackQuery, state: FSMContext):
         if result_image:
             # Record usage with custom cost
             db.use_generation(user_id, f"upscale_{factor}x", "upscale", cost=upscale_cost)
-            
+
+            # Save to mini-app history so it appears in "Мои"
+            try:
+                import base64 as _b64
+                img_b64 = _b64.b64encode(result_image).decode()
+                db.add_to_history(user_id, f"Апскейл {factor_name}", f"upscale_{factor}x", "1:1", f"data:image/jpeg;base64,{img_b64}")
+            except Exception as _he:
+                logger.warning(f"Failed to save upscale history for {user_id}: {_he}")
+
             # Get user info
             info = db.get_user_info(user_id)
             

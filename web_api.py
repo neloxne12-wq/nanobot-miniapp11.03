@@ -280,7 +280,8 @@ async def generate_from_template(request):
         download_url = f"/api/download/{img_id}"
         gen_name = tpl["name"] if tpl else "Генерация"
         try:
-            db.add_to_history(uid, gen_name, prompt[:200], image_size, download_url)
+            image_data_uri = f"data:image/jpeg;base64,{result_b64}"
+            db.add_to_history(uid, gen_name, prompt[:200], image_size, image_data_uri)
         except Exception as e:
             logger.warning(f"Failed to save history for {uid}: {e}")
 

@@ -1632,6 +1632,58 @@ function clearZoneInline(e,zid){
   if(t){t.src='';t.style.display='none'}if(v){v.src='';v.style.display='none'}
   z.classList.remove('has-file');const inp=z.querySelector('input');if(inp)inp.value='';
 }
+var _genPollTimer = null;
+var _genPollCount = 0;
+var _genPollMaxAttempts = 60; // 5 minutes (60 * 5s)
+
+function _stopGenPoll(){
+  if(_genPollTimer){ clearTimeout(_genPollTimer); _genPollTimer=null; }
+  _genPollCount=0;
+}
+
+function _startGenPoll(tplName, imageSize, costLabel){
+  _stopGenPoll();
+  _genPollCount=0;
+  var prevHistoryIds = historyData.map(function(h){return h.id;});
+  function poll(){
+    _genPollCount++;
+    if(_genPollCount > _genPollMaxAttempts){
+      _stopGenPoll();
+      var btn2=document.getElementById('st-genbtn');
+      var lbl2=document.getElementById('st-genlabel');
+      if(btn2) btn2.disabled=false;
+      if(lbl2) lbl2.textContent='СОЗДАТЬ · '+costLabel+' ген.';
+      toast('⏱ Превышено время ожидания. Проверьте раздел «МОИ»','err');
+      loadHistoryFromAPI();
+      return;
+    }
+    fetch(BACKEND_URL+'/api/history', {headers: apiHeaders()})
+    .then(function(r){return r.json();})
+    .then(function(res){
+      if(res.ok && Array.isArray(res.history) && res.history.length > 0){
+        var newest = res.history[0];
+        if(prevHistoryIds.indexOf(newest.id)===-1){
+          _stopGenPoll();
+          var btn2=document.getElementById('st-genbtn');
+          var lbl2=document.getElementById('st-genlabel');
+          if(btn2) btn2.disabled=false;
+          if(lbl2) lbl2.textContent='СОЗДАТЬ · '+costLabel+' ген.';
+          var preview = newest.image_data;
+          if(preview && preview.indexOf('/')===0) preview = BACKEND_URL+preview;
+          addToHistory({id:newest.id,name:newest.name||tplName,preview:preview,ratio:newest.ratio||imageSize,createdAt:Date.now()});
+          closeOverlay('tmplOvl');
+          if(preview) showResult(preview, newest.name||tplName);
+          loadHistoryFromAPI();
+          return;
+        }
+      }
+      _genPollTimer = setTimeout(poll, 5000);
+    })
+    .catch(function(){ _genPollTimer = setTimeout(poll, 5000); });
+  }
+  _genPollTimer = setTimeout(poll, 5000);
+}
+
 function doGenerate(){
   if(!selTpl) return;
   const ratioEl = document.querySelector('#ratioSheet .rpill.on');
@@ -1642,32 +1694,45 @@ function doGenerate(){
   btn.disabled = true;
   lbl.textContent = 'ГЕНЕРАЦИЯ...';
 
+  var costLabel = selTpl ? selTpl.cost : 1;
+  var tplName = selTpl ? selTpl.name : 'Генерация';
   var imagesB64 = sheetPhotos.filter(function(x){return !!x;});
 
   var genBody = { template_id: selTpl.id, prompt: selTpl.prompt || 'Generate image', image_size: imageSize, cost: selTpl.cost || 1, images: imagesB64 };
   if(TG_USER_ID) genBody.user_id = TG_USER_ID;
+
+  var fetchDone = false;
+  // Start polling in background — will catch result even if HTTP connection drops
+  _startGenPoll(tplName, imageSize, costLabel);
+
   fetch(BACKEND_URL + '/api/generate', { method: 'POST', headers: apiHeaders(), body: JSON.stringify(genBody) })
   .then(r => r.json())
   .then(data => {
+    fetchDone = true;
+    _stopGenPoll();
     btn.disabled = false;
-    lbl.textContent = 'СОЗДАТЬ · ' + (selTpl?selTpl.cost:10) + ' ген.';
+    lbl.textContent = 'СОЗДАТЬ · ' + costLabel + ' ген.';
     if(data.ok && data.image){
       if(selTpl){selTpl.uses=(selTpl.uses||0)+1; renderTemplates();}
       if(typeof data.generations_left !== 'undefined'){
         var gc=document.getElementById('genCount');
         if(gc) gc.textContent = data.generations_left;
       }
-      addToHistory({id:Date.now(),name:selTpl?selTpl.name:'Генерация',preview:data.image,tplName:selTpl?selTpl.name:'',ratio:imageSize,createdAt:Date.now()});
+      addToHistory({id:Date.now(),name:tplName,preview:data.image,tplName:tplName,ratio:imageSize,createdAt:Date.now()});
       closeOverlay('tmplOvl');
-      showResult(data.image, selTpl?selTpl.name:'');
+      showResult(data.image, tplName);
+      loadHistoryFromAPI();
     } else {
       toast('❌ '+(data.error||'Генерация не удалась'),'err');
     }
   })
   .catch(function(e){
-    btn.disabled = false;
-    lbl.textContent = 'СОЗДАТЬ · ' + (selTpl?selTpl.cost:10) + ' ген.';
-    toast('❌ Ошибка соединения с сервером','err');
+    if(!fetchDone){
+      // HTTP connection dropped but generation may still be running on server
+      // Keep polling — _startGenPoll already running
+      lbl.textContent = '⏳ ОЖИДАНИЕ РЕЗУЛЬТАТА...';
+      toast('⏳ Соединение прервано — ожидаем результат в фоне...','');
+    }
   });
 }
 
