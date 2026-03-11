@@ -709,6 +709,39 @@ select option{background:#0A0A14}
   overflow:hidden;
   background:#0d0d0d;
 }
+
+/* ── GENERATION SKELETON ── */
+.tcard-skel{
+  border-radius:12px;overflow:hidden;
+  border:1px solid rgba(184,255,0,.18);
+  background:#111;position:relative;
+  animation:cin .4s cubic-bezier(.2,.8,.3,1) both;
+  box-shadow:0 0 18px rgba(184,255,0,.06);
+}
+.tcard-skel-media{
+  width:100%;aspect-ratio:9/16;
+  background:linear-gradient(135deg,#181818 0%,#111 40%,#1c1c1c 60%,#111 100%);
+  background-size:300% 300%;
+  animation:skelPulse 2s ease-in-out infinite;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:flex-end;
+  padding:14px 10px;position:relative;overflow:hidden;
+}
+.tcard-skel-media::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(105deg,transparent 30%,rgba(184,255,0,.04) 50%,transparent 70%);
+  background-size:250% 100%;
+  animation:shimmer 1.8s linear infinite;
+}
+@keyframes skelPulse{
+  0%{background-position:0% 50%}
+  50%{background-position:100% 50%}
+  100%{background-position:0% 50%}
+}
+@keyframes spin{
+  0%{transform:rotate(0deg)}
+  100%{transform:rotate(360deg)}
+}
 </style>
 </head>
 <body>
@@ -1632,6 +1665,42 @@ function clearZoneInline(e,zid){
   if(t){t.src='';t.style.display='none'}if(v){v.src='';v.style.display='none'}
   z.classList.remove('has-file');const inp=z.querySelector('input');if(inp)inp.value='';
 }
+// ══ GENERATION SKELETON ══
+var _skelTimer = null;
+var _skelSeconds = 0;
+
+function showGenSkeleton(name){
+  removeGenSkeleton();
+  var grid = document.getElementById('history-grid');
+  var empty = document.getElementById('history-empty');
+  if(!grid) return;
+  if(empty) empty.style.display = 'none';
+  var el = document.createElement('div');
+  el.id = 'gen-skeleton';
+  el.className = 'tcard-skel';
+  el.innerHTML = '<div class="tcard-skel-media">'
+    +'<div style="text-align:center;padding-bottom:4px;position:relative;z-index:2;">'
+    +'<div style="font-size:26px;margin-bottom:6px;animation:spin 3s linear infinite;display:inline-block;">⏳</div>'
+    +'<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:rgba(184,255,0,.8);margin-bottom:4px;">'+(name||'ГЕНЕРАЦИЯ')+'</div>'
+    +'<div id="skel-timer" style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;color:rgba(255,255,255,.35);">0с</div>'
+    +'</div>'
+    +'</div>';
+  grid.insertBefore(el, grid.firstChild);
+  switchNav('history');
+  _skelSeconds = 0;
+  _skelTimer = setInterval(function(){
+    _skelSeconds++;
+    var t = document.getElementById('skel-timer');
+    if(t) t.textContent = _skelSeconds + 'с';
+  }, 1000);
+}
+
+function removeGenSkeleton(){
+  if(_skelTimer){ clearInterval(_skelTimer); _skelTimer = null; }
+  var el = document.getElementById('gen-skeleton');
+  if(el && el.parentNode) el.parentNode.removeChild(el);
+}
+
 var _genPollTimer = null;
 var _genPollCount = 0;
 var _genPollMaxAttempts = 60; // 5 minutes (60 * 5s)
@@ -1664,6 +1733,7 @@ function _startGenPoll(tplName, imageSize, costLabel){
         var newest = res.history[0];
         if(prevHistoryIds.indexOf(newest.id)===-1){
           _stopGenPoll();
+          removeGenSkeleton();
           var btn2=document.getElementById('st-genbtn');
           var lbl2=document.getElementById('st-genlabel');
           if(btn2) btn2.disabled=false;
@@ -1696,6 +1766,7 @@ function doGenerate(){
 
   var costLabel = selTpl ? selTpl.cost : 1;
   var tplName = selTpl ? selTpl.name : 'Генерация';
+  showGenSkeleton(tplName);
   var imagesB64 = sheetPhotos.filter(function(x){return !!x;});
 
   var genBody = { template_id: selTpl.id, prompt: selTpl.prompt || 'Generate image', image_size: imageSize, cost: selTpl.cost || 1, images: imagesB64 };
@@ -1710,6 +1781,7 @@ function doGenerate(){
   .then(data => {
     fetchDone = true;
     _stopGenPoll();
+    removeGenSkeleton();
     btn.disabled = false;
     lbl.textContent = 'СОЗДАТЬ · ' + costLabel + ' ген.';
     if(data.ok && data.image){
